@@ -54,11 +54,17 @@ async function handleCreateSession(flags: Record<string, string | boolean>) {
 
   const host = readFlag(flags, "host");
 
-  const response = await fetch(`${baseUrl}/sessions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ user, host }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user, host }),
+    });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to connect to helper service at ${baseUrl}: ${errMsg}`);
+  }
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
