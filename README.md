@@ -1,4 +1,4 @@
-# PAM Blockchain Wallet Authentication Module
+# pam-signandverify
 
 This repository provides a Pluggable Authentication Module (PAM) that defers
 interactive logins to a blockchain wallet signer. The initial focus is on
@@ -99,4 +99,3 @@ polkadot 0x1234abcd...
 - Expand signature verification and namespace mapping for Ethereum and other
   WalletConnect-compatible chains.
 - Build automated integration tests covering PAM conversation flows.
-

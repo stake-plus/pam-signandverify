@@ -6,6 +6,16 @@ pam-module/build/
 target/
 *.log
 *.swp
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.*
+*.coverprofile
+profile.cov
 cmake-build*/
 CMakeCache.txt
 CMakeFiles/
@@ -19,4 +29,6 @@ pnpm-lock.yaml
 yarn.lock
 *.tsbuildinfo
 **/__pycache__/
-
+go.work
+go.work.sum
+.env
