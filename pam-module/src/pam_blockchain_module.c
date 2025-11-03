@@ -155,31 +155,32 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
         return PAM_AUTH_ERR;
     }
 
-    // Write instruction message - use both stderr and PAM
-    fprintf(stderr, "\nScan the WalletConnect QR code with your Polkadot-compatible wallet to continue.\n\n");
-    fflush(stderr);
-    pam_message(pamh, PAM_TEXT_INFO, "Scan the WalletConnect QR code with your Polkadot-compatible wallet to continue.");
+    // SSH doesn't reliably display PAM_TEXT_INFO or stderr during keyboard-interactive
+    // Write QR code to a file and tell user to read it
+    char qr_file_path[256] = {0};
+    snprintf(qr_file_path, sizeof(qr_file_path), "/tmp/pam-qr-%s-%s.txt", user, display.session_id);
     
-    // Write QR code directly - try all methods with explicit flushes
-    fprintf(stderr, "%s\n", display.qr_ascii);
-    fflush(stderr);
-    fprintf(stdout, "%s\n", display.qr_ascii);
-    fflush(stdout);
+    FILE *qr_file = fopen(qr_file_path, "w");
+    if (qr_file != NULL) {
+        fprintf(qr_file, "WalletConnect QR Code for user: %s\n", user);
+        fprintf(qr_file, "Session ID: %s\n\n", display.session_id);
+        fprintf(qr_file, "Scan this QR code with your Polkadot-compatible wallet:\n\n");
+        fprintf(qr_file, "%s\n", display.qr_ascii);
+        fprintf(qr_file, "\nWaiting for wallet signature...\n");
+        fclose(qr_file);
+        chmod(qr_file_path, 0644);
+        
+        // Tell user via PAM - SSH should display this
+        char file_msg[512];
+        snprintf(file_msg, sizeof(file_msg), "QR code saved to: %s\nPlease read the file to see the QR code: cat %s", qr_file_path, qr_file_path);
+        pam_message(pamh, PAM_TEXT_INFO, "%s", file_msg);
+    } else {
+        // Fallback: try to send via PAM anyway
+        pam_message(pamh, PAM_TEXT_INFO, "Scan the WalletConnect QR code with your Polkadot-compatible wallet to continue.");
+        pam_info_lines(pamh, display.qr_ascii);
+    }
     
-    // Also send via PAM conversation line by line
-    pam_info_lines(pamh, display.qr_ascii);
-    
-    // Multiple flushes and small delay to ensure SSH has time to display
-    fflush(stderr);
-    fflush(stdout);
-    usleep(100000); // 100ms delay
-    
-    // Send status message
-    fprintf(stderr, "\nWaiting for wallet signature...\n");
-    fflush(stderr);
     pam_message(pamh, PAM_TEXT_INFO, "Waiting for wallet signature...");
-    fflush(stdout);
-    usleep(50000); // Another 50ms delay
 
     struct wallet_session_result result;
     char *wait_error = NULL;
@@ -187,12 +188,20 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
         pam_log(pamh, LOG_ERR, "pam_blockchain: wallet session wait failed: %s", wait_error != NULL ? wait_error : "unknown error");
         pam_message(pamh, PAM_ERROR_MSG, "Wallet authentication failed: %s", wait_error != NULL ? wait_error : "Session error");
         wallet_session_display_free(&display);
+        if (qr_file_path[0] != '\0') {
+            unlink(qr_file_path);
+        }
         free(wait_error);
         free_module_config(&config);
         return PAM_AUTH_ERR;
     }
 
     wallet_session_display_free(&display);
+
+    // Clean up QR code file after authentication attempt (if it was created)
+    if (qr_file_path[0] != '\0') {
+        unlink(qr_file_path);
+    }
 
     int auth_result = PAM_AUTH_ERR;
 
