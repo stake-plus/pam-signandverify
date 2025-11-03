@@ -234,9 +234,9 @@ static int parse_session_display_output(const char *output, struct wallet_sessio
                 dynamic_buffer_free(&qr_buffer);
                 return -1;
             }
-        } else if (line_length == 14 && strncmp(cursor, "QR_CODE_BEGIN", 14) == 0) {
+        } else if (line_length == 13 && strncmp(cursor, "QR_CODE_BEGIN", 13) == 0) {
             in_qr_block = true;
-        } else if (line_length == 12 && strncmp(cursor, "QR_CODE_END", 12) == 0) {
+        } else if (line_length == 11 && strncmp(cursor, "QR_CODE_END", 11) == 0) {
             in_qr_block = false;
         } else if (in_qr_block) {
             if (dynamic_buffer_append(&qr_buffer, cursor, line_length) != 0 || dynamic_buffer_append(&qr_buffer, "\n", 1) != 0) {
