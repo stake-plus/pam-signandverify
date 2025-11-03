@@ -1,0 +1,11 @@
+# Example configuration file for pam_blockchain. Install to /etc/security/pam_blockchain.conf
+
+# Wallet helper executable path
+helper=/usr/local/libexec/pam-blockchain-wallet-helper
+
+# Timeout for wallet authentication (seconds)
+timeout=180
+
+# Default blockchain namespace
+chain=polkadot
+

@@ -1,0 +1,37 @@
+{
+  "name": "walletconnect-helper-service",
+  "version": "0.1.0",
+  "description": "WalletConnect session broker for pam blockchain authentication module",
+  "main": "dist/index.js",
+  "bin": {
+    "walletauth-helper": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "cli": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@polkadot/util": "^12.7.2",
+    "@polkadot/util-crypto": "^12.7.2",
+    "@walletconnect/sign-client": "^2.10.6",
+    "@walletconnect/utils": "^2.10.4",
+    "body-parser": "^1.20.2",
+    "express": "^4.18.2",
+    "qrcode": "^1.5.3",
+    "uuid": "^9.0.1",
+    "ws": "^8.14.2",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.5",
+    "@types/ws": "^8.5.8",
+    "ts-node": "^10.9.2",
+    "tslib": "^2.6.2",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
+
