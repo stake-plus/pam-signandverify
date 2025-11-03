@@ -89,9 +89,27 @@ export class WalletConnectService {
 
     this.sessions.set(sessionId, session);
 
-    connection
-      .approval()
-      .then(async (sessionStruct: { topic: string; namespaces: Record<string, { accounts: string[] }> }) => {
+    // Wrap the approval promise in a way that ensures all errors are caught
+    const approvalPromise = connection.approval().catch((error: unknown) => {
+      // If the error is a proposal expiration, handle it gracefully
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes("Proposal expired") || errorMessage.includes("proposal")) {
+        this.completeSession(session, "timeout", {
+          error: "WalletConnect proposal expired - please try again",
+        });
+        return null; // Return null to indicate the approval failed
+      }
+      // Re-throw other errors to be handled below
+      throw error;
+    });
+
+    approvalPromise
+      .then(async (sessionStruct: { topic: string; namespaces: Record<string, { accounts: string[] }> } | null) => {
+        // If approval failed (returned null), we've already handled it above
+        if (!sessionStruct) {
+          return;
+        }
+
         session.topic = sessionStruct.topic;
         try {
           const namespace = sessionStruct.namespaces.polkadot;
@@ -152,9 +170,14 @@ export class WalletConnectService {
         }
       })
       .catch((error: unknown) => {
-        this.completeSession(session, "error", {
-          error: error instanceof Error ? error.message : String(error),
-        });
+        // Handle any remaining errors that weren't caught above
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        // Only update session if it's still pending (avoid overwriting timeout status)
+        if (session.status === "pending") {
+          this.completeSession(session, "error", {
+            error: errorMessage,
+          });
+        }
       });
 
     return { session };
