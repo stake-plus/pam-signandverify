@@ -1,4 +1,8 @@
 import WebSocket from "ws";
+import { hexToU8a, stringToU8a, u8aToHex } from "@polkadot/util";
+import { signatureVerify, cryptoWaitReady } from "@polkadot/util-crypto";
+import QRCode from "qrcode";
+import { randomUUID } from "crypto";
 
 // Ensure WalletConnect has a WebSocket implementation and navigator in Node.js environments
 if (typeof (globalThis as any).WebSocket === "undefined") {
@@ -8,12 +12,17 @@ if (typeof (globalThis as any).navigator === "undefined") {
   (globalThis as any).navigator = { userAgent: "node" };
 }
 
-import SignClient from "@walletconnect/sign-client";
-import { getSdkError } from "@walletconnect/utils";
-import { hexToU8a, stringToU8a, u8aToHex } from "@polkadot/util";
-import { signatureVerify, cryptoWaitReady } from "@polkadot/util-crypto";
-import QRCode from "qrcode";
-import { randomUUID } from "crypto";
+type SignClientCtor = typeof import("@walletconnect/sign-client").default;
+type SignClientInstance = import("@walletconnect/sign-client").default;
+
+// Require after polyfills to ensure the SDK sees Node globals
+// eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+const SignClient = require("@walletconnect/sign-client").default as SignClientCtor;
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+const { getSdkError } = require("@walletconnect/utils") as {
+  getSdkError: typeof import("@walletconnect/utils").getSdkError;
+};
 
 import { ServiceConfig } from "./config";
 import { SessionRecord, SessionStatus } from "./types";
@@ -33,7 +42,7 @@ export interface SessionWaitResult {
 
 export class WalletConnectService {
   private readonly config: ServiceConfig;
-  private clientPromise?: Promise<SignClient>;
+  private clientPromise?: Promise<SignClientInstance>;
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly cryptoReady: Promise<boolean>;
 
@@ -208,7 +217,7 @@ export class WalletConnectService {
     }
   }
 
-  private async ensureClient(): Promise<SignClient> {
+  private async ensureClient(): Promise<SignClientInstance> {
     if (!this.clientPromise) {
       this.clientPromise = SignClient.init({
         logger: "warn",
