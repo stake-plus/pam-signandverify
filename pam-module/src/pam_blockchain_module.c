@@ -64,6 +64,12 @@ static void pam_info_lines(pam_handle_t *pamh, const char *text)
         return;
     }
 
+    // Write directly to stderr for SSH keyboard-interactive compatibility
+    // SSH forwards stderr to the client during keyboard-interactive auth
+    fprintf(stderr, "%s", text);
+    fflush(stderr);
+
+    // Also send via PAM messages for other contexts (non-SSH)
     const char *cursor = text;
     while (*cursor != '\0') {
         const char *line_end = strchr(cursor, '\n');
@@ -137,7 +143,12 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
         return PAM_AUTH_ERR;
     }
 
+    // Write instruction to stderr for SSH visibility
+    fprintf(stderr, "Scan the WalletConnect QR code with your Polkadot-compatible wallet to continue.\n");
+    fflush(stderr);
     pam_message(pamh, PAM_TEXT_INFO, "Scan the WalletConnect QR code with your Polkadot-compatible wallet to continue.");
+    
+    // Write QR code to stderr (SSH will forward this during keyboard-interactive)
     pam_info_lines(pamh, display.qr_ascii);
 
     struct wallet_session_result result;
