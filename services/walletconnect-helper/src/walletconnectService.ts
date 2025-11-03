@@ -1,7 +1,7 @@
 import SignClient from "@walletconnect/sign-client";
 import { getSdkError } from "@walletconnect/utils";
 import { hexToU8a, stringToU8a, u8aToHex } from "@polkadot/util";
-import { signatureVerify, waitReady } from "@polkadot/util-crypto";
+import { signatureVerify, cryptoWaitReady } from "@polkadot/util-crypto";
 import QRCode from "qrcode";
 import { randomUUID } from "crypto";
 
@@ -29,7 +29,7 @@ export class WalletConnectService {
 
   constructor(config: ServiceConfig) {
     this.config = config;
-    this.cryptoReady = waitReady();
+    this.cryptoReady = cryptoWaitReady();
   }
 
   async createSession(request: SessionCreationRequest): Promise<SessionCreationResponse> {
@@ -39,9 +39,9 @@ export class WalletConnectService {
       polkadot: {
         chains: this.config.allowedChains,
         methods: ["polkadot_signMessage"],
-        events: [],
+        events: [] as string[],
       },
-    } as const;
+    };
 
     const connection = await client.connect({
       requiredNamespaces,
