@@ -178,27 +178,39 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
             chmod("/tmp/pam-qr-latest.txt", 0644);
         }
         
-        // SSH keyboard-interactive ONLY displays PROMPT messages, not INFO/ERROR
-        // Use PAM_PROMPT_ECHO_ON to force SSH to display the file path
+        // SSH keyboard-interactive ONLY displays PROMPT messages
+        // Embed the QR code directly in the prompt so it displays on user's terminal
         const struct pam_conv *conv = NULL;
         if (pam_get_item(pamh, PAM_CONV, (const void **)&conv) == PAM_SUCCESS && conv != NULL && conv->conv != NULL) {
-            char prompt_msg[512];
-            snprintf(prompt_msg, sizeof(prompt_msg), "QR code saved to: %s\nRead it with: cat %s\n(or: cat /tmp/pam-qr-latest.txt)\n\nPress ENTER to continue:", qr_path, qr_path);
-            
-            struct pam_message msg;
-            const struct pam_message *msgs[] = { &msg };
-            msg.msg_style = PAM_PROMPT_ECHO_ON;
-            msg.msg = prompt_msg;
-            
-            struct pam_response *resp = NULL;
-            conv->conv(1, msgs, &resp, conv->appdata_ptr);
-            
-            // We don't actually need the user's input - just wanted SSH to display the message
-            if (resp != NULL) {
-                if (resp->resp != NULL) {
-                    free(resp->resp);
+            // Allocate buffer large enough for QR code + header
+            size_t qr_len = strlen(display.qr_ascii);
+            size_t prompt_size = qr_len + 512;
+            char *prompt_msg = (char *)malloc(prompt_size);
+            if (prompt_msg != NULL) {
+                snprintf(prompt_msg, prompt_size, 
+                    "\n=== WalletConnect QR Code ===\n"
+                    "Scan this QR code with your Polkadot wallet:\n\n"
+                    "%s\n\n"
+                    "After scanning, press ENTER to continue waiting for signature:\n",
+                    display.qr_ascii);
+                
+                struct pam_message msg;
+                const struct pam_message *msgs[] = { &msg };
+                msg.msg_style = PAM_PROMPT_ECHO_ON;
+                msg.msg = prompt_msg;
+                
+                struct pam_response *resp = NULL;
+                conv->conv(1, msgs, &resp, conv->appdata_ptr);
+                
+                // We don't actually need the user's input - just wanted SSH to display the QR code
+                if (resp != NULL) {
+                    if (resp->resp != NULL) {
+                        free(resp->resp);
+                    }
+                    free(resp);
                 }
-                free(resp);
+                
+                free(prompt_msg);
             }
         }
     } else {
