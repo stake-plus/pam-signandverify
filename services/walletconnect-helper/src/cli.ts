@@ -1,4 +1,6 @@
 /* eslint-disable no-console */
+import fs from "fs";
+import path from "path";
 import process from "process";
 
 interface ParsedArgs {
@@ -45,6 +47,22 @@ function getBaseUrl(flags: Record<string, string | boolean>): string {
   return process.env.WALLET_HELPER_BASE_URL ?? "http://127.0.0.1:8643";
 }
 
+const LOG_FILE = "/var/log/pam-blockchain-helper.log";
+
+function logHelperEvent(message: string, meta?: unknown) {
+  try {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      message,
+      meta,
+    };
+    fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
+    fs.appendFileSync(LOG_FILE, `${JSON.stringify(entry)}\n`);
+  } catch {
+    // Logging failures should never block authentication.
+  }
+}
+
 async function handleCreateSession(flags: Record<string, string | boolean>) {
   const baseUrl = getBaseUrl(flags);
   const user = readFlag(flags, "user");
@@ -63,11 +81,24 @@ async function handleCreateSession(flags: Record<string, string | boolean>) {
     });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
+    logHelperEvent("create-session fetch failed", {
+      baseUrl,
+      user,
+      host,
+      error: errMsg,
+    });
     throw new Error(`Failed to connect to helper service at ${baseUrl}: ${errMsg}`);
   }
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    logHelperEvent("create-session non-200 response", {
+      baseUrl,
+      user,
+      host,
+      status: response.status,
+      payload,
+    });
     throw new Error(payload.error ?? `Helper service responded with status ${response.status}`);
   }
 
@@ -103,14 +134,33 @@ async function handleAwaitSession(flags: Record<string, string | boolean>) {
     timeoutSeconds = parsed;
   }
 
-  const response = await fetch(`${baseUrl}/sessions/${encodeURIComponent(sessionId)}/wait`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ timeoutSeconds }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/sessions/${encodeURIComponent(sessionId)}/wait`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ timeoutSeconds }),
+    });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    logHelperEvent("await-session fetch failed", {
+      baseUrl,
+      sessionId,
+      timeoutSeconds,
+      error: errMsg,
+    });
+    throw new Error(`Failed to connect to helper service at ${baseUrl}: ${errMsg}`);
+  }
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    logHelperEvent("await-session non-200 response", {
+      baseUrl,
+      sessionId,
+      timeoutSeconds,
+      status: response.status,
+      payload,
+    });
     throw new Error(payload.error ?? `Helper service responded with status ${response.status}`);
   }
 
@@ -134,6 +184,12 @@ async function handleAwaitSession(flags: Record<string, string | boolean>) {
   }
   if (payload.error) {
     console.log(`ERROR=${payload.error}`);
+    logHelperEvent("await-session returned error", {
+      baseUrl,
+      sessionId,
+      timeoutSeconds,
+      payload,
+    });
   }
 }
 
