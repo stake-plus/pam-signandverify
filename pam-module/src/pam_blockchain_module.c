@@ -155,37 +155,38 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
         return PAM_AUTH_ERR;
     }
 
-    // Log that we're about to display QR code
-    pam_log(pamh, LOG_INFO, "pam_blockchain: displaying QR code for user %s", user);
+    // Rocky Linux 9.6 SSH suppresses ALL output during keyboard-interactive
+    // Write QR code to file and tell user to read it
+    char qr_path[256] = {0};
+    snprintf(qr_path, sizeof(qr_path), "/tmp/pam-qr-%s.txt", display.session_id);
     
-    // Try all output methods for Rocky Linux 9.6 SSH compatibility
-    // Method 1: Direct terminal access
-    FILE *tty = fopen("/dev/tty", "w");
-    if (tty != NULL) {
-        fprintf(tty, "\n=== WalletConnect QR Code ===\n");
-        fprintf(tty, "Scan with your Polkadot wallet:\n\n");
-        fprintf(tty, "%s\n", display.qr_ascii);
-        fprintf(tty, "\nWaiting for wallet signature...\n");
-        fflush(tty);
-        fclose(tty);
+    FILE *f = fopen(qr_path, "w");
+    if (f != NULL) {
+        fprintf(f, "WalletConnect QR Code for user: %s\n", user);
+        fprintf(f, "Session: %s\n\n", display.session_id);
+        fprintf(f, "Scan this QR code with your Polkadot wallet:\n\n");
+        fprintf(f, "%s\n", display.qr_ascii);
+        fprintf(f, "\nWaiting for wallet signature...\n");
+        fclose(f);
+        chmod(qr_path, 0644);
+        
+        // Use PAM_ERROR_MSG - SSH on Rocky Linux might display this
+        char msg[512];
+        snprintf(msg, sizeof(msg), "QR code saved to %s - Read it with: cat %s", qr_path, qr_path);
+        pam_message(pamh, PAM_ERROR_MSG, "%s", msg);
+        
+        // Also write the path to a known location user can check
+        FILE *path_file = fopen("/tmp/pam-qr-latest.txt", "w");
+        if (path_file) {
+            fprintf(path_file, "%s\n", qr_path);
+            fclose(path_file);
+            chmod("/tmp/pam-qr-latest.txt", 0644);
+        }
+    } else {
+        // File creation failed - clear path so cleanup doesn't try to unlink
+        qr_path[0] = '\0';
     }
     
-    // Method 2: stderr (SSH might forward this)
-    fprintf(stderr, "\n=== WalletConnect QR Code ===\n");
-    fprintf(stderr, "Scan with your Polkadot wallet:\n\n");
-    fprintf(stderr, "%s\n", display.qr_ascii);
-    fprintf(stderr, "\nWaiting for wallet signature...\n");
-    fflush(stderr);
-    
-    // Method 3: stdout
-    fprintf(stdout, "\n=== WalletConnect QR Code ===\n");
-    fprintf(stdout, "Scan with your Polkadot wallet:\n\n");
-    fprintf(stdout, "%s\n", display.qr_ascii);
-    fprintf(stdout, "\nWaiting for wallet signature...\n");
-    fflush(stdout);
-    
-    // Method 4: PAM conversation (may not display on Rocky Linux 9.6 SSH)
-    pam_message(pamh, PAM_TEXT_INFO, "QR code sent to terminal");
     pam_message(pamh, PAM_TEXT_INFO, "Waiting for wallet signature...");
 
     struct wallet_session_result result;
@@ -194,12 +195,22 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
         pam_log(pamh, LOG_ERR, "pam_blockchain: wallet session wait failed: %s", wait_error != NULL ? wait_error : "unknown error");
         pam_message(pamh, PAM_ERROR_MSG, "Wallet authentication failed: %s", wait_error != NULL ? wait_error : "Session error");
         wallet_session_display_free(&display);
+        if (qr_path[0] != '\0') {
+            unlink(qr_path);
+        }
+        unlink("/tmp/pam-qr-latest.txt");
         free(wait_error);
         free_module_config(&config);
         return PAM_AUTH_ERR;
     }
 
     wallet_session_display_free(&display);
+
+    // Clean up QR file after authentication
+    if (qr_path[0] != '\0') {
+        unlink(qr_path);
+    }
+    unlink("/tmp/pam-qr-latest.txt");
 
     int auth_result = PAM_AUTH_ERR;
 
