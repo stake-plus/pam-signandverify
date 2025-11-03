@@ -155,32 +155,64 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
         return PAM_AUTH_ERR;
     }
 
-    // SSH doesn't reliably display PAM_TEXT_INFO or stderr during keyboard-interactive
-    // Write QR code to a file and tell user to read it
-    char qr_file_path[256] = {0};
-    snprintf(qr_file_path, sizeof(qr_file_path), "/tmp/pam-qr-%s-%s.txt", user, display.session_id);
-    
-    FILE *qr_file = fopen(qr_file_path, "w");
-    if (qr_file != NULL) {
-        fprintf(qr_file, "WalletConnect QR Code for user: %s\n", user);
-        fprintf(qr_file, "Session ID: %s\n\n", display.session_id);
-        fprintf(qr_file, "Scan this QR code with your Polkadot-compatible wallet:\n\n");
-        fprintf(qr_file, "%s\n", display.qr_ascii);
-        fprintf(qr_file, "\nWaiting for wallet signature...\n");
-        fclose(qr_file);
-        chmod(qr_file_path, 0644);
+    // Send QR code via PAM conversation - SSH should display PAM messages
+    // Use PAM_ERROR_MSG which SSH displays more reliably than TEXT_INFO
+    const struct pam_conv *conv = NULL;
+    if (pam_get_item(pamh, PAM_CONV, (const void **)&conv) == PAM_SUCCESS && conv != NULL && conv->conv != NULL) {
+        // Send instruction
+        struct pam_message msg1;
+        const struct pam_message *msgs1[] = { &msg1 };
+        msg1.msg_style = PAM_ERROR_MSG;
+        msg1.msg = "=== Scan WalletConnect QR Code Below ===";
+        struct pam_response *resp1 = NULL;
+        conv->conv(1, msgs1, &resp1, conv->appdata_ptr);
+        if (resp1) {
+            if (resp1->resp) free(resp1->resp);
+            free(resp1);
+        }
         
-        // Tell user via PAM - SSH should display this
-        char file_msg[512];
-        snprintf(file_msg, sizeof(file_msg), "QR code saved to: %s\nPlease read the file to see the QR code: cat %s", qr_file_path, qr_file_path);
-        pam_message(pamh, PAM_TEXT_INFO, "%s", file_msg);
-    } else {
-        // Fallback: try to send via PAM anyway
-        pam_message(pamh, PAM_TEXT_INFO, "Scan the WalletConnect QR code with your Polkadot-compatible wallet to continue.");
-        pam_info_lines(pamh, display.qr_ascii);
+        // Send QR code line by line as ERROR_MSG
+        const char *cursor = display.qr_ascii;
+        while (*cursor != '\0') {
+            const char *line_end = strchr(cursor, '\n');
+            size_t line_len = line_end ? (size_t)(line_end - cursor) : strlen(cursor);
+            
+            if (line_len > 0 && line_len < 1024) {
+                char *line = malloc(line_len + 1);
+                if (line) {
+                    memcpy(line, cursor, line_len);
+                    line[line_len] = '\0';
+                    
+                    struct pam_message msg;
+                    const struct pam_message *msgs[] = { &msg };
+                    msg.msg_style = PAM_ERROR_MSG;
+                    msg.msg = line;
+                    struct pam_response *resp = NULL;
+                    conv->conv(1, msgs, &resp, conv->appdata_ptr);
+                    if (resp) {
+                        if (resp->resp) free(resp->resp);
+                        free(resp);
+                    }
+                    free(line);
+                }
+            }
+            
+            if (!line_end) break;
+            cursor = line_end + 1;
+        }
+        
+        // Send waiting message
+        struct pam_message msg2;
+        const struct pam_message *msgs2[] = { &msg2 };
+        msg2.msg_style = PAM_TEXT_INFO;
+        msg2.msg = "Waiting for wallet signature...";
+        struct pam_response *resp2 = NULL;
+        conv->conv(1, msgs2, &resp2, conv->appdata_ptr);
+        if (resp2) {
+            if (resp2->resp) free(resp2->resp);
+            free(resp2);
+        }
     }
-    
-    pam_message(pamh, PAM_TEXT_INFO, "Waiting for wallet signature...");
 
     struct wallet_session_result result;
     char *wait_error = NULL;
@@ -188,20 +220,12 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
         pam_log(pamh, LOG_ERR, "pam_blockchain: wallet session wait failed: %s", wait_error != NULL ? wait_error : "unknown error");
         pam_message(pamh, PAM_ERROR_MSG, "Wallet authentication failed: %s", wait_error != NULL ? wait_error : "Session error");
         wallet_session_display_free(&display);
-        if (qr_file_path[0] != '\0') {
-            unlink(qr_file_path);
-        }
         free(wait_error);
         free_module_config(&config);
         return PAM_AUTH_ERR;
     }
 
     wallet_session_display_free(&display);
-
-    // Clean up QR code file after authentication attempt (if it was created)
-    if (qr_file_path[0] != '\0') {
-        unlink(qr_file_path);
-    }
 
     int auth_result = PAM_AUTH_ERR;
 
