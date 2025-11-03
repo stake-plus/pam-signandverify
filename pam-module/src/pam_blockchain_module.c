@@ -156,7 +156,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
     }
 
     // Use pam_vprompt for better SSH compatibility
-    pam_vprompt(pamh, PAM_TEXT_INFO, NULL, "Scan the WalletConnect QR code with your Polkadot-compatible wallet to continue.");
+    pam_vprompt(pamh, PAM_TEXT_INFO, NULL, "%s", "Scan the WalletConnect QR code with your Polkadot-compatible wallet to continue.");
     
     // Write QR code directly - try all methods with explicit flushes
     fprintf(stderr, "\n%s\n", display.qr_ascii);
@@ -173,7 +173,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
     usleep(100000); // 100ms delay
     
     // Send status message
-    pam_vprompt(pamh, PAM_TEXT_INFO, NULL, "Waiting for wallet signature...");
+    pam_vprompt(pamh, PAM_TEXT_INFO, NULL, "%s", "Waiting for wallet signature...");
     fprintf(stderr, "\nWaiting for wallet signature...\n");
     fflush(stderr);
     fflush(stdout);
