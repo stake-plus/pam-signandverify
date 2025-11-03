@@ -73,7 +73,7 @@ export class WalletConnectService {
 
     connection
       .approval()
-      .then(async (sessionStruct) => {
+      .then(async (sessionStruct: { topic: string; namespaces: Record<string, { accounts: string[] }> }) => {
         session.topic = sessionStruct.topic;
         try {
           const namespace = sessionStruct.namespaces.polkadot;
@@ -119,7 +119,7 @@ export class WalletConnectService {
             publicKey: u8aToHex(verification.publicKey),
             signature,
           });
-        } catch (error) {
+        } catch (error: unknown) {
           this.completeSession(session, "error", {
             error: error instanceof Error ? error.message : String(error),
           });
@@ -133,7 +133,7 @@ export class WalletConnectService {
           }
         }
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         this.completeSession(session, "error", {
           error: error instanceof Error ? error.message : String(error),
         });

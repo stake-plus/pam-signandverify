@@ -88,9 +88,13 @@ async function handleAwaitSession(flags: Record<string, string | boolean>) {
   }
 
   const timeoutRaw = readFlag(flags, "timeout");
-  const timeoutSeconds = timeoutRaw ? Number(timeoutRaw) : undefined;
-  if (timeoutRaw && (Number.isNaN(timeoutSeconds) || timeoutSeconds <= 0)) {
-    throw new Error("--timeout must be a positive number of seconds");
+  let timeoutSeconds: number | undefined;
+  if (timeoutRaw !== undefined) {
+    const parsed = Number(timeoutRaw);
+    if (Number.isNaN(parsed) || parsed <= 0) {
+      throw new Error("--timeout must be a positive number of seconds");
+    }
+    timeoutSeconds = parsed;
   }
 
   const response = await fetch(`${baseUrl}/sessions/${encodeURIComponent(sessionId)}/wait`, {
@@ -139,7 +143,7 @@ async function main() {
       console.error("Usage: walletauth-helper <create-session|await-session> [options]");
       process.exitCode = 2;
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
   }

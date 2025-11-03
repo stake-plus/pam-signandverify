@@ -1,6 +1,6 @@
 import bodyParser from "body-parser";
 import express, { Request, Response } from "express";
-import { z } from "zod";
+import { z, ZodIssue } from "zod";
 
 import { ServiceConfig } from "./config";
 import { WalletConnectService } from "./walletconnectService";
@@ -20,14 +20,16 @@ export function createServer(config: ServiceConfig) {
 
   app.use(bodyParser.json());
 
-  app.get("/healthz", (_req, res) => {
+  app.get("/healthz", (_req: Request, res: Response) => {
     res.json({ status: "ok" });
   });
 
   app.post("/sessions", async (req: Request, res: Response) => {
     const parseResult = createSessionSchema.safeParse(req.body);
     if (!parseResult.success) {
-      res.status(400).json({ error: parseResult.error.errors.map((e) => e.message).join(", ") });
+      res
+        .status(400)
+        .json({ error: parseResult.error.errors.map((issue: ZodIssue) => issue.message).join(", ") });
       return;
     }
 
@@ -40,16 +42,16 @@ export function createServer(config: ServiceConfig) {
         challenge: response.session.challenge,
       });
     } catch (error) {
-      res.status(500).json({
-        error: error instanceof Error ? error.message : String(error),
-      });
+      res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
   app.post("/sessions/:id/wait", async (req: Request, res: Response) => {
     const waitParse = waitSessionSchema.safeParse(req.body ?? {});
     if (!waitParse.success) {
-      res.status(400).json({ error: waitParse.error.errors.map((e) => e.message).join(", ") });
+      res
+        .status(400)
+        .json({ error: waitParse.error.errors.map((issue: ZodIssue) => issue.message).join(", ") });
       return;
     }
 
@@ -65,9 +67,7 @@ export function createServer(config: ServiceConfig) {
         error: result.session.error,
       });
     } catch (error) {
-      res.status(404).json({
-        error: error instanceof Error ? error.message : String(error),
-      });
+      res.status(404).json({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 

@@ -13,8 +13,8 @@
     "cli": "tsx src/cli.ts"
   },
   "dependencies": {
-    "@polkadot/util": "^12.7.2",
-    "@polkadot/util-crypto": "^12.7.2",
+    "@polkadot/util": "^12.6.2",
+    "@polkadot/util-crypto": "^12.6.2",
     "@walletconnect/sign-client": "^2.10.6",
     "@walletconnect/utils": "^2.10.4",
     "body-parser": "^1.20.2",

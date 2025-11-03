@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z, ZodIssue } from "zod";
 
 export interface ServiceConfig {
   host: string;
@@ -43,7 +43,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): ServiceConfig {
   });
 
   if (!parsed.success) {
-    const message = parsed.error.errors.map((err) => err.message).join(", ");
+    const message = parsed.error.errors.map((err: ZodIssue) => err.message).join(", ");
     throw new Error(`Configuration error: ${message}`);
   }
 
@@ -61,8 +61,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): ServiceConfig {
 
   const allowedChains = (values.allowedChains ?? "polkadot:91b171bb158e2d3848fa23a9f1c25182")
     .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
+    .map((entry: string) => entry.trim())
+    .filter((entry: string) => entry.length > 0);
   if (allowedChains.length === 0) {
     throw new Error("Configuration error: WALLETCONNECT_ALLOWED_CHAINS yields no chains");
   }
