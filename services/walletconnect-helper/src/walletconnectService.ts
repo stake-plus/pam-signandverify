@@ -3,7 +3,13 @@ import { getSdkError } from "@walletconnect/utils";
 import { hexToU8a, stringToU8a, u8aToHex } from "@polkadot/util";
 import { signatureVerify, cryptoWaitReady } from "@polkadot/util-crypto";
 import QRCode from "qrcode";
+import WebSocket from "ws";
 import { randomUUID } from "crypto";
+
+// Ensure WalletConnect has a WebSocket implementation in Node.js environments
+if (typeof (globalThis as any).WebSocket === "undefined") {
+  (globalThis as any).WebSocket = WebSocket;
+}
 
 import { ServiceConfig } from "./config";
 import { SessionRecord, SessionStatus } from "./types";
