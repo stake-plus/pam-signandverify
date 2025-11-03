@@ -64,12 +64,21 @@ static void pam_info_lines(pam_handle_t *pamh, const char *text)
         return;
     }
 
-    // Write directly to stderr for SSH keyboard-interactive compatibility
-    // SSH forwards stderr to the client during keyboard-interactive auth
+    // Try multiple methods to ensure SSH displays the QR code
+    
+    // Method 1: Write directly to stderr (SSH forwards this during keyboard-interactive)
     fprintf(stderr, "%s", text);
     fflush(stderr);
+    
+    // Method 2: Try /dev/tty if available (direct terminal access)
+    FILE *tty = fopen("/dev/tty", "w");
+    if (tty != NULL) {
+        fprintf(tty, "%s", text);
+        fflush(tty);
+        fclose(tty);
+    }
 
-    // Also send via PAM messages for other contexts (non-SSH)
+    // Method 3: Send via PAM conversation as text info (for non-SSH contexts)
     const char *cursor = text;
     while (*cursor != '\0') {
         const char *line_end = strchr(cursor, '\n');
@@ -90,6 +99,9 @@ static void pam_info_lines(pam_handle_t *pamh, const char *text)
         }
         cursor = line_end + 1;
     }
+    
+    // Force another flush after PAM messages
+    fflush(stderr);
 }
 
 static const char *resolve_hostname(pam_handle_t *pamh, char *buffer, size_t buffer_size)
@@ -143,13 +155,29 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
         return PAM_AUTH_ERR;
     }
 
-    // Write instruction to stderr for SSH visibility
-    fprintf(stderr, "Scan the WalletConnect QR code with your Polkadot-compatible wallet to continue.\n");
-    fflush(stderr);
-    pam_message(pamh, PAM_TEXT_INFO, "Scan the WalletConnect QR code with your Polkadot-compatible wallet to continue.");
+    // Use pam_vprompt for better SSH compatibility
+    pam_vprompt(pamh, PAM_TEXT_INFO, NULL, "Scan the WalletConnect QR code with your Polkadot-compatible wallet to continue.");
     
-    // Write QR code to stderr (SSH will forward this during keyboard-interactive)
+    // Write QR code directly - try all methods with explicit flushes
+    fprintf(stderr, "\n%s\n", display.qr_ascii);
+    fflush(stderr);
+    fprintf(stdout, "\n%s\n", display.qr_ascii);
+    fflush(stdout);
+    
+    // Also send via PAM conversation line by line
     pam_info_lines(pamh, display.qr_ascii);
+    
+    // Multiple flushes and small delay to ensure SSH has time to display
+    fflush(stderr);
+    fflush(stdout);
+    usleep(100000); // 100ms delay
+    
+    // Send status message
+    pam_vprompt(pamh, PAM_TEXT_INFO, NULL, "Waiting for wallet signature...");
+    fprintf(stderr, "\nWaiting for wallet signature...\n");
+    fflush(stderr);
+    fflush(stdout);
+    usleep(50000); // Another 50ms delay
 
     struct wallet_session_result result;
     char *wait_error = NULL;
