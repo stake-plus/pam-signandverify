@@ -4,10 +4,9 @@ import { signatureVerify, cryptoWaitReady } from "@polkadot/util-crypto";
 import QRCode from "qrcode";
 import { randomUUID } from "crypto";
 
-// Ensure WalletConnect has a WebSocket implementation and navigator in Node.js environments
-if (typeof (globalThis as any).WebSocket === "undefined") {
-  (globalThis as any).WebSocket = WebSocket;
-}
+// Force WalletConnect to use ws implementation (Node 18+ ships an EventTarget-based WebSocket)
+(globalThis as any).WebSocket = WebSocket;
+
 if (typeof (globalThis as any).navigator === "undefined") {
   (globalThis as any).navigator = { userAgent: "node" };
 }
