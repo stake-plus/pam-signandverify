@@ -155,64 +155,38 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
         return PAM_AUTH_ERR;
     }
 
-    // Send QR code via PAM conversation - SSH should display PAM messages
-    // Use PAM_ERROR_MSG which SSH displays more reliably than TEXT_INFO
-    const struct pam_conv *conv = NULL;
-    if (pam_get_item(pamh, PAM_CONV, (const void **)&conv) == PAM_SUCCESS && conv != NULL && conv->conv != NULL) {
-        // Send instruction
-        struct pam_message msg1;
-        const struct pam_message *msgs1[] = { &msg1 };
-        msg1.msg_style = PAM_ERROR_MSG;
-        msg1.msg = "=== Scan WalletConnect QR Code Below ===";
-        struct pam_response *resp1 = NULL;
-        conv->conv(1, msgs1, &resp1, conv->appdata_ptr);
-        if (resp1) {
-            if (resp1->resp) free(resp1->resp);
-            free(resp1);
-        }
-        
-        // Send QR code line by line as ERROR_MSG
-        const char *cursor = display.qr_ascii;
-        while (*cursor != '\0') {
-            const char *line_end = strchr(cursor, '\n');
-            size_t line_len = line_end ? (size_t)(line_end - cursor) : strlen(cursor);
-            
-            if (line_len > 0 && line_len < 1024) {
-                char *line = malloc(line_len + 1);
-                if (line) {
-                    memcpy(line, cursor, line_len);
-                    line[line_len] = '\0';
-                    
-                    struct pam_message msg;
-                    const struct pam_message *msgs[] = { &msg };
-                    msg.msg_style = PAM_ERROR_MSG;
-                    msg.msg = line;
-                    struct pam_response *resp = NULL;
-                    conv->conv(1, msgs, &resp, conv->appdata_ptr);
-                    if (resp) {
-                        if (resp->resp) free(resp->resp);
-                        free(resp);
-                    }
-                    free(line);
-                }
-            }
-            
-            if (!line_end) break;
-            cursor = line_end + 1;
-        }
-        
-        // Send waiting message
-        struct pam_message msg2;
-        const struct pam_message *msgs2[] = { &msg2 };
-        msg2.msg_style = PAM_TEXT_INFO;
-        msg2.msg = "Waiting for wallet signature...";
-        struct pam_response *resp2 = NULL;
-        conv->conv(1, msgs2, &resp2, conv->appdata_ptr);
-        if (resp2) {
-            if (resp2->resp) free(resp2->resp);
-            free(resp2);
-        }
+    // Log that we're about to display QR code
+    pam_log(pamh, LOG_INFO, "pam_blockchain: displaying QR code for user %s", user);
+    
+    // Try all output methods for Rocky Linux 9.6 SSH compatibility
+    // Method 1: Direct terminal access
+    FILE *tty = fopen("/dev/tty", "w");
+    if (tty != NULL) {
+        fprintf(tty, "\n=== WalletConnect QR Code ===\n");
+        fprintf(tty, "Scan with your Polkadot wallet:\n\n");
+        fprintf(tty, "%s\n", display.qr_ascii);
+        fprintf(tty, "\nWaiting for wallet signature...\n");
+        fflush(tty);
+        fclose(tty);
     }
+    
+    // Method 2: stderr (SSH might forward this)
+    fprintf(stderr, "\n=== WalletConnect QR Code ===\n");
+    fprintf(stderr, "Scan with your Polkadot wallet:\n\n");
+    fprintf(stderr, "%s\n", display.qr_ascii);
+    fprintf(stderr, "\nWaiting for wallet signature...\n");
+    fflush(stderr);
+    
+    // Method 3: stdout
+    fprintf(stdout, "\n=== WalletConnect QR Code ===\n");
+    fprintf(stdout, "Scan with your Polkadot wallet:\n\n");
+    fprintf(stdout, "%s\n", display.qr_ascii);
+    fprintf(stdout, "\nWaiting for wallet signature...\n");
+    fflush(stdout);
+    
+    // Method 4: PAM conversation (may not display on Rocky Linux 9.6 SSH)
+    pam_message(pamh, PAM_TEXT_INFO, "QR code sent to terminal");
+    pam_message(pamh, PAM_TEXT_INFO, "Waiting for wallet signature...");
 
     struct wallet_session_result result;
     char *wait_error = NULL;
