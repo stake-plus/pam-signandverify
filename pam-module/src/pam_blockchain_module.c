@@ -170,17 +170,36 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
         fclose(f);
         chmod(qr_path, 0644);
         
-        // Use PAM_ERROR_MSG - SSH on Rocky Linux might display this
-        char msg[512];
-        snprintf(msg, sizeof(msg), "QR code saved to %s - Read it with: cat %s", qr_path, qr_path);
-        pam_message(pamh, PAM_ERROR_MSG, "%s", msg);
-        
         // Also write the path to a known location user can check
         FILE *path_file = fopen("/tmp/pam-qr-latest.txt", "w");
         if (path_file) {
             fprintf(path_file, "%s\n", qr_path);
             fclose(path_file);
             chmod("/tmp/pam-qr-latest.txt", 0644);
+        }
+        
+        // SSH keyboard-interactive ONLY displays PROMPT messages, not INFO/ERROR
+        // Use PAM_PROMPT_ECHO_ON to force SSH to display the file path
+        const struct pam_conv *conv = NULL;
+        if (pam_get_item(pamh, PAM_CONV, (const void **)&conv) == PAM_SUCCESS && conv != NULL && conv->conv != NULL) {
+            char prompt_msg[512];
+            snprintf(prompt_msg, sizeof(prompt_msg), "QR code saved to: %s\nRead it with: cat %s\n(or: cat /tmp/pam-qr-latest.txt)\n\nPress ENTER to continue:", qr_path, qr_path);
+            
+            struct pam_message msg;
+            const struct pam_message *msgs[] = { &msg };
+            msg.msg_style = PAM_PROMPT_ECHO_ON;
+            msg.msg = prompt_msg;
+            
+            struct pam_response *resp = NULL;
+            conv->conv(1, msgs, &resp, conv->appdata_ptr);
+            
+            // We don't actually need the user's input - just wanted SSH to display the message
+            if (resp != NULL) {
+                if (resp->resp != NULL) {
+                    free(resp->resp);
+                }
+                free(resp);
+            }
         }
     } else {
         // File creation failed - clear path so cleanup doesn't try to unlink
