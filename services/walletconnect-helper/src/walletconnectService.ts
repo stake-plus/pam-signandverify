@@ -26,6 +26,16 @@ const { getSdkError } = require("@walletconnect/utils") as {
 import { ServiceConfig } from "./config";
 import { SessionRecord, SessionStatus } from "./types";
 
+/**
+ * Strip ANSI escape sequences from a string
+ * This removes color codes and terminal formatting that can't be displayed in PAM
+ */
+function stripAnsiCodes(text: string): string {
+  // Remove ANSI escape sequences: \x1b[...m (ESC [ followed by numbers/semicolons and ends with a letter)
+  // This regex matches common ANSI codes: colors, formatting, cursor movements
+  return text.replace(/\x1b\[[0-9;]*m/g, "").replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+}
+
 interface SessionCreationRequest {
   user: string;
   host?: string;
@@ -69,7 +79,14 @@ export class WalletConnectService {
       throw new Error("WalletConnect client did not provide a pairing URI");
     }
 
-    const qrAscii = await QRCode.toString(connection.uri, { type: "terminal", small: true });
+    // Generate QR code and strip any ANSI escape codes for PAM display
+    // PAM/SSH contexts don't interpret terminal escape sequences
+    const qrTerminal = await QRCode.toString(connection.uri, { 
+      type: "terminal", 
+      small: true,
+      errorCorrectionLevel: "M"
+    });
+    const qrAscii = stripAnsiCodes(qrTerminal);
     const challenge = this.buildChallenge(request.user, request.host);
     const chainId = this.config.allowedChains[0];
     const sessionId = randomUUID();
