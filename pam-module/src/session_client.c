@@ -254,9 +254,23 @@ static int parse_session_display_output(const char *output, struct wallet_sessio
         cursor = line_end + 1;
     }
 
-    if (display->session_id == NULL || display->uri == NULL || qr_buffer.length == 0) {
+    if (display->session_id == NULL) {
         if (error_message != NULL) {
-            *error_message = duplicate_string("helper response missing required fields");
+            *error_message = duplicate_string("helper response missing SESSION_ID");
+        }
+        dynamic_buffer_free(&qr_buffer);
+        return -1;
+    }
+    if (display->uri == NULL) {
+        if (error_message != NULL) {
+            *error_message = duplicate_string("helper response missing URI");
+        }
+        dynamic_buffer_free(&qr_buffer);
+        return -1;
+    }
+    if (qr_buffer.length == 0) {
+        if (error_message != NULL) {
+            *error_message = duplicate_string("helper response missing QR code block");
         }
         dynamic_buffer_free(&qr_buffer);
         return -1;
